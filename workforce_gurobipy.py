@@ -12,28 +12,32 @@
 
 from gurobipy import *
 import pandas as pd
-import numpy as np
+
 
 num_weeks = 7
 week_days = 7
-num_shift = 4
+num_shifts = 4
 sunday_shifts = 4
-nurseList = range(20)
+shifts_per_week = 16
+num_nurses = 19
+nurseList = range(num_nurses)
+weekdaysList = range(week_days)
 dayList = range(num_weeks*7)
-shiftList = range(num_shift)
+shiftList = range(num_shifts)
 weekList = range(num_weeks)
 
-shift_total_list = []
+tot_shifts_to_assign = shifts_per_week * num_weeks
+min_shifts_per_nurse = tot_shifts_to_assign // num_nurses
+if tot_shifts_to_assign % num_nurses == 0:
+    max_shifts_per_nurse = min_shifts_per_nurse
+else:
+    max_shifts_per_nurse = min_shifts_per_nurse + 1
 
-for n in nurseList:
-    for w in weekList:
-        for d in dayList:
-            for s in shiftList:
-                day = w*7 + d
-                shift_id = "x[{},{},{}]".format(n, day, s)
-                # shift_id = (w, d, s)
-                shift_total_list.append(shift_id)
-                # i = i+1
+print("Min shifts per nurse {}".format(min_shifts_per_nurse))
+print("Max shifts per nurse {}".format(max_shifts_per_nurse))
+
+maxShifts = max_shifts_per_nurse
+minShifts = min_shifts_per_nurse - 1
 
 try:
     # Sample data
@@ -41,8 +45,8 @@ try:
     # Number of workers required for each shift
     shiftRequirements = {(d, s): 1 for d in dayList for s in shiftList}
 
-    for w in range(0, num_weeks):
-        for d in range(0, week_days):
+    for w in weekList:
+        for d in weekdaysList:
             if d < (week_days - 1):
                 day = w*7 + d
                 for s in [0, 1]:
@@ -66,16 +70,31 @@ try:
     # Constraint: assign exactly shiftRequirements[s] workers
     model.addConstrs((x.sum('*', d, s) == shiftRequirements[d, s] for d in dayList for s in shiftList), name='shiftRequirement')
 
-    # #TODO Constraint: max number of shift per day = 1
+    # Max daily shifts = 1
     model.addConstrs((x.sum(n, d, '*') <= 1 for n in nurseList for d in dayList), name='dailyshifts')
     ############################################################
     # Set global sense for ALL objectives
     model.ModelSense = GRB.MINIMIZE
-    minShifts = 1
-    maxShifts = 6
+
     # Set up primary objective
     minShiftsConstr = model.addConstrs(((x.sum(n, '*') >= minShifts for n in nurseList)), name='minShifts')
     maxShiftsConstr = model.addConstrs(((x.sum(n, '*') <= maxShifts for n in nurseList)), name='maxShifts')
+
+    # # balance weeks
+    # for w in weekList:
+    #     tmpweekList = range(w*7, w*7+6)
+    #     name_var = 'weekVar_w{}'.format(w)
+    #     week = model.addVars(nurseList, tmpweekList, shiftList, ub=avail, vtype=GRB.BINARY, name=name_var)
+    #     name_constr = 'weekConstr_w{}'.format(w)
+    #     model.addConstrs(((week.sum(n, '*') <= 2 for n in nurseList)), name=name_constr)
+
+    # TODO add sunday constraint
+    # TODO add saturday constraint
+    # TODO add turni di prima/turni di seconda constraint
+    #model.addConstrs((x.sum(n, d, 0) + x.sum(n, d, 2) <= maxShifts // 2 for n in nurseList for d in dayList), name='maxShiftPrima')
+    #model.addConstrs((x.sum(n, d, 0) + x.sum(n, d, 2) >= minShifts // 2 for n in nurseList for d in dayList), name='minShiftPrima')
+    #model.addConstrs((x.sum(n, d, 1) + x.sum(n, d, 3) <= maxShifts // 2 for n in nurseList for d in dayList), name='maxShiftSeconda')
+    #model.addConstrs((x.sum(n, d, 1) + x.sum(n, d, 3) <= minShifts // 2 for n in nurseList for d in dayList), name='minShiftSeconda')
 
     # Save problem
     model.write('workforce_VES.lp')
