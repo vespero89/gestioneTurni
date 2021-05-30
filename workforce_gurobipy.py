@@ -18,8 +18,8 @@ num_weeks = 6
 week_days = 7
 num_shifts = 4
 sunday_shifts = 4
-shifts_per_week = 16
-num_nurses = 19
+shifts_per_week = 8
+num_nurses = 12
 nurseList = range(num_nurses)
 weekdaysList = range(week_days)
 infrasettimanali = [0, 1, 2, 3, 4, 5]
@@ -35,7 +35,10 @@ if tot_shifts_to_assign % num_nurses == 0:
 else:
     max_shifts_per_nurse = min_shifts_per_nurse + 1
 
-weekend_shifts_to_assing = 2 * num_weeks
+num_turni_di_prima = max_shifts_per_nurse // 2
+num_turni_di_seconda = max_shifts_per_nurse - num_turni_di_prima
+
+weekend_shifts_to_assing = 3 * num_weeks
 min_we_shifts_per_nurse = weekend_shifts_to_assing // num_nurses
 if weekend_shifts_to_assing % num_nurses == 0:
     max_we_shifts_per_nurse = min_we_shifts_per_nurse
@@ -44,6 +47,7 @@ else:
 
 print("Min shifts per nurse {}".format(min_shifts_per_nurse))
 print("Max shifts per nurse {}".format(max_shifts_per_nurse))
+print("Max shifts per nurse di Prima {}".format(num_turni_di_prima))
 
 print("Min WE shifts per nurse {}".format(min_we_shifts_per_nurse))
 print("Max WE shifts per nurse {}".format(max_we_shifts_per_nurse))
@@ -95,18 +99,16 @@ try:
     model.addConstrs((x.sum(n, d, '*') <= 1 for n in nurseList for d in dayList), name='dailyshifts')
 
     # Constraint: compute the total number of shifts for each worker
-    model.addConstrs((totShifts[w] == x.sum(w, '*') for w in nurseList), name='totShifts')
+    model.addConstrs((totShifts[n] == x.sum(n, '*') for n in nurseList), name='totShifts')
 
     # balance weeks
     for w in weekList:
         tmpweekList = range(w*7, w*7+7)
         name_var = 'weekVar_w{}'.format(w)
-        week = model.addVars(nurseList, tmpweekList, shiftList, ub=avail, vtype=GRB.BINARY, name=name_var)
+        # week = model.addVars(nurseList, tmpweekList, shiftList, ub=avail, vtype=GRB.BINARY, name=name_var)
         name_constr = 'weekConstr_w{}'.format(w)
-        model.addConstrs(((week.sum(n, '*') <= 2 for n in nurseList)), name=name_constr)
+        model.addConstrs(((x.sum(n, tmpweekList, '*') <= 2 for n in nurseList)), name=name_constr)
 
-    ## Slack variables for each shift constraint so that the shifts can
-    ## be satisfied - TODO con questo posso farci il vincolo sul numero delle domeniche
     turni_di_prima = model.addVars(nurseList, dayList, [0, 2], ub=avail, vtype=GRB.BINARY, name='T_di_Prima')
     turni_di_seconda = model.addVars(nurseList, dayList, [1, 3], ub=avail, vtype=GRB.BINARY, name='T_di_Seconda')
     # Variable to represent these shifts
@@ -119,33 +121,28 @@ try:
     # balance weekends
     tmpSundayList = []
     for w in weekList:
-        # tmpweekEndList.append(w * 7 + 5)
+        # tmpSundayList.append(w * 7 + 5)
         tmpSundayList.append(w * 7 + 6)
-    turni_dom = model.addVars(nurseList, tmpSundayList, shiftList, ub=avail, vtype=GRB.BINARY, name='weekEndVar')
-    totTurni_dom = model.addVar(name='CTotDomeniche')
-    model.addConstrs((totTurni_dom == turni_dom.sum() for n in nurseList), name='CtotweekendConstr')
-    model.addConstrs((turni_dom.sum(n, '*') >= min_we_shifts_per_nurse for n in nurseList), name='MinTxWeekend')
-    model.addConstrs((turni_dom.sum(n, '*') <= max_we_shifts_per_nurse for n in nurseList), name='MaxTxWeekend')
+    # model.addConstrs((x.sum(n, tmpSundayList, '*') >= min_we_shifts_per_nurse for n in nurseList), name='MinTxWeekend')
+    model.addConstrs((x.sum(n, tmpSundayList, '*') <= max_we_shifts_per_nurse for n in nurseList for d in tmpSundayList), name='MaxTxWeekend')
 
     ############################################################
     # Constraint: set minShift/maxShift variable to less/greater than the
     # number of shifts among all workers
     minShift = model.addVar(name='minShift')
     maxShift = model.addVar(name='maxShift')
-    minShiftPrima = model.addVar(name='minShiftP')
-    maxShiftPrima = model.addVar(name='maxShiftP')
-    minShiftSeconda = model.addVar(name='minShiftS')
-    maxShiftSeconda = model.addVar(name='maxShiftS')
+    numShiftPrima = model.addVar(name='maxShiftP')
+    numShiftSeconda = model.addVar(name='maxShiftS')
     minShiftWeekend = model.addVar(name='minShiftW')
     maxShiftWeekend = model.addVar(name='maxShiftW')
 
     # Add constraint to the model solver
     model.addGenConstrMin(minShift, totShifts, min_shifts_per_nurse, name='minShift')
     model.addGenConstrMax(maxShift, totShifts, max_shifts_per_nurse, name='maxShift')
-    model.addGenConstrMin(minShiftPrima, turni_di_prima, name='minShiftPr')
-    model.addGenConstrMax(maxShiftPrima, turni_di_prima, name='maxShiftPr')
-    model.addGenConstrMin(minShiftSeconda, turni_di_seconda, name='minShiftSec')
-    model.addGenConstrMax(maxShiftSeconda, turni_di_seconda, name='maxShiftSec')
+    #model.addGenConstrMin(numShiftPrima, turni_di_prima, num_turni_di_prima-1, name='minShiftPr')
+    #model.addGenConstrMax(numShiftPrima, turni_di_prima, num_turni_di_prima, name='maxShiftPr')
+    #model.addGenConstrMin(numShiftSeconda, turni_di_seconda, num_turni_di_seconda-1, name='minShiftSec')
+    #model.addGenConstrMax(numShiftSeconda, turni_di_seconda, num_turni_di_seconda, name='maxShiftSec')
     # model.addGenConstrMin(minShiftWeekend, totShifts, name='minShiftSabDom')
     # model.addGenConstrMax(maxShiftWeekend, totShifts, name='maxShiftSabDom')
     ############################################################
@@ -153,8 +150,8 @@ try:
     model.ModelSense = GRB.MINIMIZE
 
     # Set up secondary objective
-    model.setObjectiveN(maxShift - minShift, index=1, priority=1, name='Fairness')
-    model.setObjectiveN(maxShiftPrima - maxShiftSeconda, index=2, name='FairnessPrimaSeconda')
+    model.setObjectiveN(maxShift - minShift, index=0, priority=2, abstol=2.0, reltol=0.1, name='Fairness')
+    # model.setObjectiveN(numShiftPrima - numShiftSeconda, index=1, name='FairnessPrimaSeconda')
     # model.setObjectiveN(maxShiftWeekend - minShiftWeekend, index=2, priority=10, name='FairnessWeekend')
 
     # Save problem
