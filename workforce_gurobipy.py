@@ -72,11 +72,13 @@ try:
 
     ## Slack variables for each shift constraint so that the shifts can
     ## be satisfied - TODO con questo posso farci il vincolo sul numero delle domeniche
-    #slacks = model.addVars(shiftList, name='Slack')
-    ## Variable to represent the total slack
-    #totSlack = model.addVar(name='totSlack')
-    ## Constraint: set totSlack equal to the total slack
-    #model.addConstr(totSlack == slacks.sum(), name='totSlack')
+    turni_di_prima = model.addVars(nurseList, dayList, [0, 2], ub=avail, vtype=GRB.BINARY, name='T_di_Prima')
+    turni_di_seconda = model.addVars(nurseList, dayList, [1, 3], ub=avail, vtype=GRB.BINARY, name='T_di_Prima')
+    # Variable to represent these shifts
+    totTurnidiPrima = model.addVar(name='totTdiPrima')
+    totTurnidiSeconda = model.addVar(name='totTdiSeconda')
+    model.addConstr(totTurnidiPrima == turni_di_prima.sum(), name='CtotTdPrima')
+    model.addConstr(totTurnidiSeconda == turni_di_seconda.sum(), name='CtotTdSeconda')
 
     # Constraint: assign exactly shiftRequirements[s] workers
     model.addConstrs((x.sum('*', d, s) == shiftRequirements[d, s] for d in dayList for s in shiftList), name='shiftRequirement')
@@ -86,21 +88,26 @@ try:
     ############################################################
     # Constraint: compute the total number of shifts for each worker
     model.addConstrs((totShifts[w] == x.sum(w, '*') for w in nurseList), name='totShifts')
-    # TODO add var - count the number of turni di prima e turni di seconda, poi addGenConstrMin
 
     # Constraint: set minShift/maxShift variable to less/greater than the
     # number of shifts among all workers
     minShift = model.addVar(name='minShift')
     maxShift = model.addVar(name='maxShift')
+    minShiftPrima = model.addVar(name='minShiftP')
+    maxShiftPrima = model.addVar(name='maxShiftP')
+    minShiftSeconda = model.addVar(name='minShiftS')
+    maxShiftSeconda = model.addVar(name='maxShiftS')
+
+    # Add constraint to the model solver
     model.addGenConstrMin(minShift, totShifts, name='minShift')
     model.addGenConstrMax(maxShift, totShifts, name='maxShift')
+    model.addGenConstrMin(minShiftPrima, totShifts, name='minShiftPr')
+    model.addGenConstrMax(maxShiftPrima, totShifts, name='maxShiftPr')
+    model.addGenConstrMin(minShiftSeconda, totShifts, name='minShiftSec')
+    model.addGenConstrMax(maxShiftSeconda, totShifts, name='maxShiftSec')
     ############################################################
     # Set global sense for ALL objectives
     model.ModelSense = GRB.MINIMIZE
-
-    # Set up primary objective
-    # minShiftsConstr = model.addConstrs(((x.sum(n, '*') >= minShifts for n in nurseList)), name='minShifts')
-    # maxShiftsConstr = model.addConstrs(((x.sum(n, '*') <= maxShifts for n in nurseList)), name='maxShifts')
 
     ## TODO Set up  objective on the number of sundays
     ##model.setObjectiveN(totSlack, index=0, priority=2, abstol=2.0, reltol=0.1, name='TotalSlack')
@@ -110,6 +117,7 @@ try:
 
     # Set up secondary objective
     model.setObjectiveN(maxShift - minShift, index=1, priority=1, name='Fairness')
+    model.setObjectiveN(maxShiftPrima - maxShiftSeconda, index=1, priority=1, name='FairnessPrimaSeconda')
 
     # # balance weeks
     # for w in weekList:
