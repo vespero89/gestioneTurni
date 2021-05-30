@@ -113,8 +113,8 @@ try:
     # Variable to represent these shifts
     totTurnidiPrima = model.addVar(name='totTdiPrima')
     totTurnidiSeconda = model.addVar(name='totTdiSeconda')
-    model.addConstrs((totTurnidiPrima == turni_di_prima.sum() for w in nurseList), name='CtotTdPrima')
-    model.addConstrs((totTurnidiSeconda == turni_di_seconda.sum() for w in nurseList), name='CtotTdSeconda')
+    model.addConstrs((totTurnidiPrima == turni_di_prima.sum(n, '*') for n in nurseList), name='CtotTdPrima')
+    model.addConstrs((totTurnidiSeconda == turni_di_seconda.sum(n, '*') for n in nurseList), name='CtotTdSeconda')
 
     # Turni del weekend
     # balance weekends
@@ -134,16 +134,13 @@ try:
     maxShift = model.addVar(name='maxShift')
     numShiftPrima = model.addVar(name='maxShiftP')
     numShiftSeconda = model.addVar(name='maxShiftS')
-    # TODO add constrPrima vs Seconda
     # TODO add constr Consecutive shifts
 
     # Add constraint to the model solver
     model.addGenConstrMin(minShift, totShifts, min_shifts_per_nurse, name='minShift')
     model.addGenConstrMax(maxShift, totShifts, max_shifts_per_nurse, name='maxShift')
-    #model.addGenConstrMin(numShiftPrima, turni_di_prima, num_turni_di_prima-1, name='minShiftPr')
-    #model.addGenConstrMax(numShiftPrima, turni_di_prima, num_turni_di_prima, name='maxShiftPr')
-    #model.addGenConstrMin(numShiftSeconda, turni_di_seconda, num_turni_di_seconda-1, name='minShiftSec')
-    #model.addGenConstrMax(numShiftSeconda, turni_di_seconda, num_turni_di_seconda, name='maxShiftSec')
+    model.addGenConstrMax(numShiftPrima, turni_di_prima, num_turni_di_prima, name='maxShiftPr')
+    model.addGenConstrMax(numShiftSeconda, turni_di_seconda, num_turni_di_seconda, name='maxShiftSec')
     # model.addGenConstrMin(minShiftWeekend, totShifts, name='minShiftSabDom')
     # model.addGenConstrMax(maxShiftWeekend, totShifts, name='maxShiftSabDom')
     ############################################################
@@ -152,7 +149,7 @@ try:
 
     # Set up secondary objective
     model.setObjectiveN(maxShift - minShift, index=0, priority=2, abstol=2.0, reltol=0.1, name='Fairness')
-    # model.setObjectiveN(numShiftPrima - numShiftSeconda, index=1, name='FairnessPrimaSeconda')
+    model.setObjectiveN(numShiftPrima - numShiftSeconda, index=1, name='FairnessPrimaSeconda')
     # model.setObjectiveN(maxShiftWeekend - minShiftWeekend, index=2, priority=10, name='FairnessWeekend')
 
     # Save problem
