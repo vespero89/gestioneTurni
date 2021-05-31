@@ -12,15 +12,19 @@
 
 from gurobipy import *
 import pandas as pd
+import random
 
 
-num_weeks = 16
+num_weeks = 6
+#num_weeks = 1
 week_days = 7
 num_shifts = 4
 sunday_shifts = 4
-shifts_per_week = 8
-num_nurses = 19
-nurseList = range(num_nurses)
+shifts_per_week = 16
+num_nurses = 22
+#num_nurses = 16
+nurseList = list(range(num_nurses))
+random.shuffle(nurseList)
 nurseList_ = range(1, num_nurses)
 weekdaysList = range(week_days)
 infrasettimanali = [0, 1, 2, 3, 4, 5]
@@ -39,7 +43,7 @@ else:
 num_turni_di_prima = max_shifts_per_nurse // 2
 num_turni_di_seconda = max_shifts_per_nurse - num_turni_di_prima
 
-weekend_shifts_to_assing = 4 * num_weeks
+weekend_shifts_to_assing = sunday_shifts * num_weeks
 min_we_shifts_per_nurse = weekend_shifts_to_assing // num_nurses
 if weekend_shifts_to_assing % num_nurses == 0:
     max_we_shifts_per_nurse = min_we_shifts_per_nurse
@@ -104,9 +108,8 @@ try:
     for w in weekList:
         tmpweekList = range(w*7, w*7+6)
         name_var = 'weekVar_w{}'.format(w)
-        # week = model.addVars(nurseList, tmpweekList, shiftList, ub=avail, vtype=GRB.BINARY, name=name_var)
         name_constr = 'weekConstr_w{}'.format(w)
-        model.addConstrs(((x.sum(n, tmpweekList, '*') <= 2 for n in nurseList)), name=name_constr)
+        model.addConstrs(((x.sum(n, tmpweekList, '*') <= 1 for n in nurseList)), name=name_constr)
 
     turni_di_prima = model.addVars(nurseList, dayList, [0, 2], ub=avail, vtype=GRB.BINARY, name='T_di_Prima')
     turni_di_seconda = model.addVars(nurseList, dayList, [1, 3], ub=avail, vtype=GRB.BINARY, name='T_di_Seconda')
@@ -134,8 +137,6 @@ try:
     maxShift = model.addVar(name='maxShift')
     numShiftPrima = model.addVar(name='maxShiftP')
     numShiftSeconda = model.addVar(name='maxShiftS')
-    # TODO add constr Consecutive shifts
-
     # Add constraint to the model solver
     model.addGenConstrMin(minShift, totShifts, min_shifts_per_nurse, name='minShift')
     model.addGenConstrMax(maxShift, totShifts, max_shifts_per_nurse, name='maxShift')
@@ -143,6 +144,21 @@ try:
     model.addGenConstrMax(numShiftSeconda, turni_di_seconda, num_turni_di_seconda, name='maxShiftSec')
     # model.addGenConstrMin(minShiftWeekend, totShifts, name='minShiftSabDom')
     # model.addGenConstrMax(maxShiftWeekend, totShifts, name='maxShiftSabDom')
+    ############################################################
+    # TODO PENALIZZA DOMENICHE di FILA
+    # New variables: z[w,s] == 1 if worker w works shift s, but not shift s-1
+    # z = model.addVars(nurseList, dayList, shiftList, ub=avail, vtype=GRB.BINARY, name='start')
+    # model.addConstrs((z.sum('*', d, s) == shiftRequirements[d, s] for d in dayList for s in shiftList))
+    # z = m.addVars(availability, vtype=GRB.BINARY, name="start")
+    # New constraints: z[w,s] == 1 if worker w works shift s, but not shift s-1
+    # day_couples = set(zip(dayList, dayList[1:]))
+    # for n in nurseList:
+    #     for couple in day_couples:
+    #         d1, d2 = couple
+    #         model.addConstr(x.sum([n, d2, '*']) + x.sum([n, d1, '*']) <= 1)
+    # model.addConstrs((x.sum([n, s2, '*']) + x.sum([n, s1, '*']) <= z.sum([n, s2, '*']) for n in nurseList for s1, s2 in zip(dayList, dayList[1:])))
+    # model.addConstrs(x[n, dayList[0], s] == z[n, dayList[0], s] for n in nurseList for s in shiftList)
+
     ############################################################
     # Set global sense for ALL objectives
     model.ModelSense = GRB.MINIMIZE
