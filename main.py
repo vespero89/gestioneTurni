@@ -1,53 +1,41 @@
 from ortools.sat.python import cp_model
 import numpy as np
+import random
 import pandas as pd
 
 
 class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
     """Print intermediate solutions."""
 
-    def __init__(self, shifts, num_nurses, num_days, num_shifts, num_sunday_shifts, num_weeks, sols):
+    def __init__(self, shifts, num_nurses, num_tot_days, num_shifts, sols):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self._shifts = shifts
-        self._sunday_shifts = num_sunday_shifts
         self._num_nurses = num_nurses
-        self._num_days = num_days
+        self._num_days = num_tot_days
         self._num_shifts = num_shifts
-        self._num_weeks = num_weeks
         self._solutions = set(sols)
         self._solution_count = 0
-        self._solution_limit = 1000
-        self.solution_array = np.zeros((num_days*num_weeks, num_sunday_shifts), dtype=np.int8)
+        self._solution_limit = 10
+        self.solution_array = np.ones((num_tot_days, num_shifts), dtype=np.int8)*-1
 
     def on_solution_callback(self):
         if self._solution_count in self._solutions:
             print('Solution %i' % self._solution_count)
-            for w in range(self._num_weeks):
-                for d in range(1, self._num_days+1):
-                    print('Day ' + str(d+(w*self._num_days)))
-                    if d % self._num_days != 0:
-                        for n in range(self._num_nurses):
-                            is_working = False
-                            for s in range(self._num_shifts):
-                                if self.Value(self._shifts[(n, d+(w*self._num_days), s)]):
-                                    is_working = True
-                                    print('  Nurse {} works shift {}'.format(n, s))
-                                    self.solution_array[d+(w*self._num_days)-1, s + 2] = int(n + 1)
-                            # if not is_working:
-                            #     print('  Nurse {} does not work'.format(n))
-                    else:
-                        for n in range(self._num_nurses):
-                            is_working = False
-                            for s in range(self._num_shifts + 2):
-                                if self.Value(self._shifts[(n, d+(w*self._num_days), s)]):
-                                    is_working = True
-                                    print('  Nurse {} works shift {}'.format(n, s))
-                                    self.solution_array[d+(w*self._num_days)-1, s] = int(n + 1)
-                            # if not is_working:
-                            #     print('  Nurse {} does not work'.format(n))
+            for d in range(self._num_days):
+                # print('Day ' + str(d))
+                for n in range(self._num_nurses):
+                    is_working = False
+                    for s in range(self._num_shifts):
+                        value = self.Value(self._shifts[(n, d, s)])
+                        if value == 1:
+                            is_working = True
+                            # print('  Nurse {} works shift {}'.format(n, s))
+                            self.solution_array[d, s] = int(n)
+                    # if not is_working:
+                    #     print('  Nurse {} does not work'.format(n))
             print()
-            # solution_filename = 'Solution_' + str(self._solution_count) + '.csv'
-            # pd.DataFrame(self.solution_array).to_csv(solution_filename)
+            solution_filename = 'Solution_' + str(self._solution_count) + '.csv'
+            pd.DataFrame(self.solution_array).to_csv(solution_filename)
         self._solution_count += 1
         if self._solution_count >= self._solution_limit:
             print('Stop search after %i solutions' % self._solution_limit)
@@ -59,100 +47,114 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
 
 def main():
     # Data.
+    num_weeks = 12
+    week_days = 7
+    num_shifts = 4
+    sunday_shifts = 4
+    shifts_per_week = 16
     num_nurses = 22
-    num_week_shifts = 2
-    num_sunday_shifts = 4
-    all_week_days = 7
-    num_weeks = 3
-    all_nurses = range(num_nurses)
-    week_shifts = range(num_week_shifts)
-    sunday_shifts = range(num_sunday_shifts)
-    week_days = [1, 2, 3, 4, 5, 6]
-    all_days = [1, 2, 3, 4, 5, 6, 7]
+    nurseList = list(range(num_nurses))
+    # random.shuffle(nurseList)
+    nurseList_ = range(1, num_nurses)
+    weekdaysList = range(week_days)
+    infrasettimanali = [0, 1, 2, 3, 4, 5]
+    dayList = range(num_weeks * 7)
+    shiftList = range(num_shifts)
+    weekList = range(num_weeks)
+
+    tot_shifts_to_assign_per_nurse = shifts_per_week * num_weeks
+    min_shifts_per_nurse = max(1, tot_shifts_to_assign_per_nurse // num_nurses)
+    if tot_shifts_to_assign_per_nurse % num_nurses == 0:
+        max_shifts_per_nurse = min_shifts_per_nurse
+    else:
+        max_shifts_per_nurse = min_shifts_per_nurse + 2
+
+    num_turni_di_prima = (max_shifts_per_nurse // 2)
+    num_turni_di_seconda = max_shifts_per_nurse - num_turni_di_prima
+
+    weekend_shifts_to_assing = sunday_shifts * num_weeks
+    min_we_shifts_per_nurse = weekend_shifts_to_assing // num_nurses
+    if weekend_shifts_to_assing % num_nurses == 0:
+        max_we_shifts_per_nurse = min_we_shifts_per_nurse
+    else:
+        max_we_shifts_per_nurse = min_we_shifts_per_nurse + 1
+
+    print("Min shifts per nurse {}".format(min_shifts_per_nurse))
+    print("Max shifts per nurse {}".format(max_shifts_per_nurse))
+    print("Max shifts per nurse di Prima {}".format(num_turni_di_prima))
+    print("Max shifts per nurse di Seconda {}".format(num_turni_di_seconda))
+
+    print("Min WE shifts per nurse {}".format(min_we_shifts_per_nurse))
+    print("Max WE shifts per nurse {}".format(max_we_shifts_per_nurse))
+
     # Creates the model.
     model = cp_model.CpModel()
 
     # Creates shift variables.
     # shifts[(n, d, s)]: nurse 'n' works shift 's' on day 'd'.
     shifts = {}
+    for n in nurseList:
+        for d in dayList:
+            for s in shiftList:
+                shifts[(n, d, s)] = model.NewBoolVar('shift_op%id%is%i' % (n, d, s))
 
-    for n in all_nurses:
-        for w in range(num_weeks):
-            for d in week_days:
-                for s in week_shifts:
-                    shifts[(n, d+(w*all_week_days), s)] = model.NewBoolVar('shift_op%id%is%i' % (n, d+(w*all_week_days), s))
-                # add sundays
-                sunday = all_week_days
-                for s in sunday_shifts:
-                    shifts[(n, sunday+(w*all_week_days), s)] = model.NewBoolVar('shift_op%id%is%i' % (n, sunday+(w*all_week_days), s))
-    #
-    # # Each shift is assigned to exactly one nurse in the schedule period.
-    # for w in range(num_weeks):
-    #     for d in all_days:
-    #         if (((w*all_week_days) + d) % 7) != 0:
-    #             for s in week_shifts:
-    #                 model.Add(sum(shifts[(n, (w*all_week_days) + d, s)] for n in all_nurses) == 1)
-    #         else:
-    #             for s in sunday_shifts:
-    #                 model.Add(sum(shifts[(n, (w*all_week_days) + d, s)] for n in all_nurses) == 1)
+    # setup shift planner
+    for w in weekList:
+        for d in infrasettimanali:
+            day = w*7 + d
+            model.Add(sum(shifts[(n, day, 0)] for n in nurseList) == 0)
+            model.Add(sum(shifts[(n, day, 1)] for n in nurseList) == 0)
+    # MOLINARO
+    for w in weekList:
+        for d in weekdaysList:
+            day = int(w * 7 + d)
+            model.Add(shifts[(0, day, 2)] == 0)
+            model.Add(shifts[(0, day, 3)] == 0)
+
+    # Each shift is assigned to exactly one nurse in the schedule period.
+    i = 0
+    for d in dayList:
+        i = i + 1
+        if i == 7:
+            for s in shiftList:
+                model.Add(sum(shifts[(n, d, s)] for n in nurseList) == 1)
+            i = 0
+
+    for w in weekList:
+        for d in infrasettimanali:
+            day = w * 7 + d
+            for s in [2, 3]:
+                model.Add(sum(shifts[(n, day, s)] for n in nurseList) == 1)
 
     # Each nurse works at most one shift per day.
-    for n in all_nurses:
-        #if n != (num_nurses - 1):
-        for d in all_days:
-            for w in range(num_weeks):
-                if (((w*all_week_days) + d) % 7) != 0:
-                    model.Add(sum(shifts[(n, (w*all_week_days) + d, s)] for s in week_shifts) <= 2)
-                else:
-                    model.Add(sum(shifts[(n, (w*all_week_days) + d, s)] for s in sunday_shifts) <= 2)
-        # else:
-        #     # and add constraint for Molinaro
-        #     sunday_afternoon = [2, 3]
-        #     for w in range(num_weeks):
-        #         for d in all_days:
-        #             if (((w*all_week_days) + d) % 7) != 0:
-        #                 model.Add(sum(shifts[(n, (w*all_week_days) + d, s)] for s in week_shifts) == 0)
-        #             else:
-        #                 model.Add(sum(shifts[(n, (w*all_week_days) + d, s)] for s in sunday_afternoon) == 0)
+    for n in nurseList:
+        for d in dayList:
+            model.Add(sum(shifts[(n, d, s)] for s in shiftList) <= 1)
 
-    # Try to distribute the shifts evenly, so that each nurse works
-    # min_shifts_per_nurse shifts. If this is not possible, because the total
-    # number of shifts is not divisible by the number of nurses, some nurses will
-    # be assigned one more shift.
-    min_shifts_per_nurse = (num_weeks * ((num_week_shifts * 6) + 4)) // num_nurses
-    if (num_weeks * ((num_week_shifts * 6) + 4)) % num_nurses == 0:
-        max_shifts_per_nurse = min_shifts_per_nurse
-    else:
-        max_shifts_per_nurse = min_shifts_per_nurse + 1
-
-    print("Min shifts per nurse {}".format(min_shifts_per_nurse))
-    print("Max shifts per nurse {}".format(max_shifts_per_nurse))
-
-    # TODO FROM HERE - add saturday constraint
-    for n in all_nurses:
+    for n in nurseList:
         num_shifts_worked = 0
-        for d in all_days:
-            for w in range(num_weeks):
-                if (((w*all_week_days) + d) % 7) != 0:
-                    for s in week_shifts:
-                        num_shifts_worked += shifts[(n, d, s)]
-                else:
-                    for s in sunday_shifts:
-                        num_shifts_worked += shifts[(n, d, s)]
+        num_shifts_prima = 0
+        num_shifts_seconda = 0
+        for d in dayList:
+            for s in shiftList:
+                num_shifts_worked += shifts[(n, d, s)]
+            for s1 in [0, 2]:
+                num_shifts_prima += shifts[(n, d, s1)]
+            for s2 in [1, 3]:
+                num_shifts_seconda += shifts[(n, d, s2)]
         model.Add(min_shifts_per_nurse <= num_shifts_worked)
         model.Add(num_shifts_worked <= max_shifts_per_nurse)
+        # model.Add(num_shifts_prima <= num_turni_di_prima)
+        # model.Add(num_shifts_seconda <= num_turni_di_seconda)
 
     # Creates the solver and solve.
     solver = cp_model.CpSolver()
-    solver.parameters.linearization_level = 0
+    # solver.parameters.linearization_level = 0
     # Display the first five solutions.
-    a_few_solutions = range(20)
-    solution_printer = NursesPartialSolutionPrinter(shifts, num_nurses,
-                                                    all_week_days, num_week_shifts, num_sunday_shifts,
-                                                    num_weeks, a_few_solutions)
-    status = solver.SearchForAllSolutions(model, solution_printer)
-    # status = solver.SolveWithSolutionCallback(model, solution_printer) # todo improve printer
-
+    a_few_solutions = range(1)
+    solution_printer = NursesPartialSolutionPrinter(shifts, num_nurses, len(dayList), num_shifts, a_few_solutions)
+    # status = solver.SearchForAllSolutions(model, solution_printer)
+    status = solver.SolveWithSolutionCallback(model, solution_printer)
     # Statistics.
     print()
     print('Statistics')

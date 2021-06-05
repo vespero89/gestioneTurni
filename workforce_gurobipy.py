@@ -84,7 +84,7 @@ try:
             for d in infrasettimanali:
                 day = int(w * 7 + d)
                 avail[n, day, 0] = 0
-                avail[n, day, 0] = 0
+                avail[n, day, 1] = 0
 
     # Create initial model
     model = Model("Turni_Infermieri_Dialisi")
