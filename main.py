@@ -47,14 +47,13 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
 
 def main():
     # Data.
-    num_weeks = 12
+    num_weeks = 9
     week_days = 7
     num_shifts = 4
     sunday_shifts = 4
     shifts_per_week = 16
     num_nurses = 22
     nurseList = list(range(num_nurses))
-    # random.shuffle(nurseList)
     nurseList_ = range(1, num_nurses)
     weekdaysList = range(week_days)
     infrasettimanali = [0, 1, 2, 3, 4, 5]
@@ -63,7 +62,7 @@ def main():
     weekList = range(num_weeks)
 
     tot_shifts_to_assign_per_nurse = shifts_per_week * num_weeks
-    min_shifts_per_nurse = max(1, tot_shifts_to_assign_per_nurse // num_nurses)
+    min_shifts_per_nurse = tot_shifts_to_assign_per_nurse // num_nurses
     if tot_shifts_to_assign_per_nurse % num_nurses == 0:
         max_shifts_per_nurse = min_shifts_per_nurse
     else:
@@ -114,7 +113,7 @@ def main():
     # Each shift is assigned to exactly one nurse in the schedule period.
     i = 0
     for d in dayList:
-        i = i + 1
+        i += 1
         if i == 7:
             for s in shiftList:
                 model.Add(sum(shifts[(n, d, s)] for n in nurseList) == 1)
@@ -131,27 +130,57 @@ def main():
         for d in dayList:
             model.Add(sum(shifts[(n, d, s)] for s in shiftList) <= 1)
 
-    for n in nurseList:
+    for n in nurseList_:
         num_shifts_worked = 0
         num_shifts_prima = 0
         num_shifts_seconda = 0
+        num_shifts_domenica = 0
+        j = 0
         for d in dayList:
+            j += 1
             for s in shiftList:
                 num_shifts_worked += shifts[(n, d, s)]
             for s1 in [0, 2]:
                 num_shifts_prima += shifts[(n, d, s1)]
             for s2 in [1, 3]:
                 num_shifts_seconda += shifts[(n, d, s2)]
+            if j == 7:
+                for sd in shiftList:
+                    num_shifts_domenica += shifts[(n, d, sd)]
+                j = 0
         model.Add(min_shifts_per_nurse <= num_shifts_worked)
         model.Add(num_shifts_worked <= max_shifts_per_nurse)
-        # model.Add(num_shifts_prima <= num_turni_di_prima)
-        # model.Add(num_shifts_seconda <= num_turni_di_seconda)
+        model.Add(min_we_shifts_per_nurse <= num_shifts_domenica)
+        model.Add(num_shifts_domenica <= max_we_shifts_per_nurse)
+        model.Add(num_shifts_prima <= num_turni_di_prima)
+        model.Add(num_shifts_seconda <= num_turni_di_seconda)
+    ######MOLINARO###############################################
+    weekend_shifts_to_assing_M = 2 * num_weeks
+    min_we_shifts_per_nurse_M = weekend_shifts_to_assing_M // num_nurses
+    if weekend_shifts_to_assing_M % num_nurses == 0:
+        max_we_shifts_per_nurse_M = min_we_shifts_per_nurse_M
+    else:
+        max_we_shifts_per_nurse_M = min_we_shifts_per_nurse_M + 1
+    num_shifts_prima_M = 0
+    num_shifts_seconda_M = 0
+    num_shifts_domenica_M = 0
+    j = 0
+    for d in dayList:
+        j += 1
+        if j == 7:
+            for sd in shiftList:
+                num_shifts_domenica_M += shifts[(0, d, sd)]
+            num_shifts_prima_M += shifts[(0, d, 0)]
+            num_shifts_seconda_M += shifts[(0, d, 1)]
+            j = 0
+    model.Add(min_we_shifts_per_nurse_M <= num_shifts_domenica_M)
+    model.Add(num_shifts_domenica_M <= max_we_shifts_per_nurse_M)
 
     # Creates the solver and solve.
     solver = cp_model.CpSolver()
-    # solver.parameters.linearization_level = 0
+    solver.parameters.linearization_level = 0
     # Display the first five solutions.
-    a_few_solutions = range(1)
+    a_few_solutions = range(5)
     solution_printer = NursesPartialSolutionPrinter(shifts, num_nurses, len(dayList), num_shifts, a_few_solutions)
     # status = solver.SearchForAllSolutions(model, solution_printer)
     status = solver.SolveWithSolutionCallback(model, solution_printer)
