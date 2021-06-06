@@ -1,6 +1,6 @@
 from ortools.sat.python import cp_model
 import numpy as np
-import random
+import itertools
 import pandas as pd
 
 
@@ -47,7 +47,7 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
 
 def main():
     # Data.
-    num_weeks = 9
+    num_weeks = 7
     week_days = 7
     num_shifts = 4
     sunday_shifts = 4
@@ -66,7 +66,7 @@ def main():
     if tot_shifts_to_assign_per_nurse % num_nurses == 0:
         max_shifts_per_nurse = min_shifts_per_nurse
     else:
-        max_shifts_per_nurse = min_shifts_per_nurse + 2
+        max_shifts_per_nurse = min_shifts_per_nurse + 1
 
     num_turni_di_prima = (max_shifts_per_nurse // 2)
     num_turni_di_seconda = max_shifts_per_nurse - num_turni_di_prima
@@ -78,6 +78,7 @@ def main():
     else:
         max_we_shifts_per_nurse = min_we_shifts_per_nurse + 1
 
+    print("Generated weeks {}".format(num_weeks))
     print("Min shifts per nurse {}".format(min_shifts_per_nurse))
     print("Max shifts per nurse {}".format(max_shifts_per_nurse))
     print("Max shifts per nurse di Prima {}".format(num_turni_di_prima))
@@ -175,6 +176,39 @@ def main():
             j = 0
     model.Add(min_we_shifts_per_nurse_M <= num_shifts_domenica_M)
     model.Add(num_shifts_domenica_M <= max_we_shifts_per_nurse_M)
+    #############################################################
+    # Penalized transitions
+    # disposizioni
+    dispositions = []
+    for di in itertools.product(shiftList, repeat=2):
+        dispositions.append(di)
+    for n in nurseList_:
+        for d in range((num_weeks * 7) - 3):
+            for disp in dispositions:
+                transition1 = [shifts[n, d, disp[0]].Not(), shifts[n, d+1, disp[1]].Not()]
+                transition2 = [shifts[n, d, disp[0]].Not(), shifts[n, d+2, disp[1]].Not()]
+                transition3 = [shifts[n, d, disp[0]].Not(), shifts[n, d+3, disp[1]].Not()]
+                model.AddBoolOr(transition1)
+                model.AddBoolOr(transition2)
+                model.AddBoolOr(transition3)
+    # TODO add penalized weekend transitions
+    # TODO add condition for nurseList_:  num_shift_worked_per_shift <= ((max_shifts_per_nurse // num_weeks) + 1)
+    ################## BALANCE WEEKS ############################################################################
+    max_shifts_per_nurse_per_week = (max_shifts_per_nurse // num_weeks) + 1
+    for n in nurseList_:
+        num_shifts_worked_in_week = 0
+        j = 0
+        for d in dayList:
+            j += 1
+            if j < 8:
+                for s in shiftList:
+                    num_shifts_worked_in_week += shifts[(n, d, s)]
+            else:
+                model.Add(num_shifts_worked_in_week <= max_shifts_per_nurse_per_week)
+                j = 0
+                num_shifts_worked_in_week = 0
+                for s in shiftList:
+                    num_shifts_worked_in_week += shifts[(n, d, s)]
 
     # Creates the solver and solve.
     solver = cp_model.CpSolver()
