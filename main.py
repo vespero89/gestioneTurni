@@ -20,7 +20,7 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
 
     def on_solution_callback(self):
         if self._solution_count in self._solutions:
-            print('Solution %i' % self._solution_count)
+            # print('Solution %i' % self._solution_count)
             for d in range(self._num_days):
                 # print('Day ' + str(d))
                 for n in range(self._num_nurses):
@@ -77,6 +77,9 @@ def main():
         max_we_shifts_per_nurse = min_we_shifts_per_nurse
     else:
         max_we_shifts_per_nurse = min_we_shifts_per_nurse + 1
+
+    # num_weeks = input("Inserire numero di settimane da generare: ")
+    # num_weeks = int(num_weeks)
 
     print("Generated weeks {}".format(num_weeks))
     print("Min shifts per nurse {}".format(min_shifts_per_nurse))
