@@ -1,13 +1,13 @@
 from ortools.sat.python import cp_model
-import numpy as np
 import itertools
+from datetime import datetime
 import pandas as pd
 
 
 class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
     """Print intermediate solutions."""
 
-    def __init__(self, shifts, num_nurses, num_tot_days, num_shifts, sols):
+    def __init__(self, shifts, num_nurses, num_tot_days, num_shifts, start_date, shift_name_list, sols):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self._shifts = shifts
         self._num_nurses = num_nurses
@@ -16,7 +16,12 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
         self._solutions = set(sols)
         self._solution_count = 0
         self._solution_limit = 10
-        self.solution_array = np.ones((num_tot_days, num_shifts), dtype=np.int8)*-1
+        date_time_obj = datetime.strptime(start_date, '%d-%m-%Y')
+        self.date_range = pd.date_range(date_time_obj, periods=num_tot_days)
+        self.shifts_list = shift_name_list
+        columns_name = ['Data']
+        columns_name = columns_name + shift_name_list
+        self.solution_array = pd.DataFrame(index=range(num_tot_days), columns=columns_name)
 
     def on_solution_callback(self):
         if self._solution_count in self._solutions:
@@ -30,12 +35,12 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
                         if value == 1:
                             is_working = True
                             # print('  Nurse {} works shift {}'.format(n, s))
-                            self.solution_array[d, s] = int(n)
+                            self.solution_array.at[d, self.shifts_list[s]] = int(n)
                     # if not is_working:
                     #     print('  Nurse {} does not work'.format(n))
-            print()
             solution_filename = 'Solution_' + str(self._solution_count) + '.csv'
-            pd.DataFrame(self.solution_array).to_csv(solution_filename)
+            self.solution_array['Data'] = self.date_range.strftime('%d/%m/%Y')
+            self.solution_array.to_csv(solution_filename)
         self._solution_count += 1
         if self._solution_count >= self._solution_limit:
             print('Stop search after %i solutions' % self._solution_limit)
@@ -47,7 +52,7 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
 
 def main():
     # Data.
-    num_weeks = 7
+    num_weeks = 10
     week_days = 7
     num_shifts = 4
     sunday_shifts = 4
@@ -60,6 +65,8 @@ def main():
     dayList = range(num_weeks * 7)
     shiftList = range(num_shifts)
     weekList = range(num_weeks)
+    start_date = '07-06-2021'
+    shifts_name = ['Mattina 1', 'Mattina 2', 'Sera 1', 'Sera 2']
 
     tot_shifts_to_assign_per_nurse = shifts_per_week * num_weeks
     min_shifts_per_nurse = tot_shifts_to_assign_per_nurse // num_nurses
@@ -160,7 +167,7 @@ def main():
         model.Add(num_shifts_seconda <= num_turni_di_seconda)
     ######MOLINARO###############################################
     weekend_shifts_to_assing_M = 2 * num_weeks
-    min_we_shifts_per_nurse_M = weekend_shifts_to_assing_M // num_nurses
+    min_we_shifts_per_nurse_M = max(2, (weekend_shifts_to_assing_M // num_nurses))
     if weekend_shifts_to_assing_M % num_nurses == 0:
         max_we_shifts_per_nurse_M = min_we_shifts_per_nurse_M
     else:
@@ -180,7 +187,7 @@ def main():
     model.Add(min_we_shifts_per_nurse_M <= num_shifts_domenica_M)
     model.Add(num_shifts_domenica_M <= max_we_shifts_per_nurse_M)
     #############################################################
-    # Penalized transitions
+    # Penalized transitions two consecutive days
     # disposizioni
     dispositions = []
     for di in itertools.product(shiftList, repeat=2):
@@ -194,8 +201,30 @@ def main():
                 model.AddBoolOr(transition1)
                 model.AddBoolOr(transition2)
                 model.AddBoolOr(transition3)
-    # TODO add penalized weekend transitions
-    # TODO add condition for nurseList_:  num_shift_worked_per_shift <= ((max_shifts_per_nurse // num_weeks) + 1)
+    #############################################################################################################
+    # Penalized transitions consecutive sunday
+    for n in nurseList:
+        for w in range(1, (num_weeks - 2)):
+            for disp_s in dispositions:
+                transitions1 = [shifts[n, ((w*7) - 1), disp_s[0]].Not(), shifts[n, ((w+1)*7 - 1), disp_s[1]].Not()]
+                transitions2 = [shifts[n, ((w*7) - 1), disp_s[0]].Not(), shifts[n, ((w+2)*7 - 1), disp_s[1]].Not()]
+                transitions3 = [shifts[n, ((w*7) - 1), disp_s[0]].Not(), shifts[n, ((w+3)*7 - 1), disp_s[1]].Not()]
+                model.AddBoolOr(transitions1)
+                model.AddBoolOr(transitions2)
+                model.AddBoolOr(transitions3)
+    # Penalized transitions consecutive saturday
+    dispositions_sat = []
+    for di in itertools.product([2, 3], repeat=2):
+        dispositions_sat.append(di)
+    for n in nurseList:
+        for w in range(1, (num_weeks - 2)):
+            for disp_s in dispositions_sat:
+                transitionsa1 = [shifts[n, ((w+1)*7 - 2), disp_s[0]].Not(), shifts[n, ((w*7) - 2), disp_s[1]].Not()]
+                transitionsa2 = [shifts[n, ((w+2)*7 - 2), disp_s[0]].Not(), shifts[n, ((w*7) - 2), disp_s[1]].Not()]
+                transitionsa3 = [shifts[n, ((w+3)*7 - 2), disp_s[0]].Not(), shifts[n, ((w*7) - 2), disp_s[1]].Not()]
+                model.AddBoolOr(transitionsa1)
+                model.AddBoolOr(transitionsa2)
+                model.AddBoolOr(transitionsa3)
     ################## BALANCE WEEKS ############################################################################
     max_shifts_per_nurse_per_week = (max_shifts_per_nurse // num_weeks) + 1
     for n in nurseList_:
@@ -218,7 +247,8 @@ def main():
     solver.parameters.linearization_level = 0
     # Display the first five solutions.
     a_few_solutions = range(5)
-    solution_printer = NursesPartialSolutionPrinter(shifts, num_nurses, len(dayList), num_shifts, a_few_solutions)
+    solution_printer = NursesPartialSolutionPrinter(shifts, num_nurses, len(dayList), num_shifts, start_date,
+                                                    shifts_name, a_few_solutions)
     # status = solver.SearchForAllSolutions(model, solution_printer)
     status = solver.SolveWithSolutionCallback(model, solution_printer)
     # Statistics.
