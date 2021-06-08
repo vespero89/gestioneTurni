@@ -1,5 +1,4 @@
 from ortools.sat.python import cp_model
-import numpy as np
 import itertools
 import pandas as pd
 
@@ -16,7 +15,7 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
         self._solutions = set(sols)
         self._solution_count = 0
         self._solution_limit = 10
-        self.solution_array = np.ones((num_tot_days, num_shifts), dtype=np.int8)*-1
+        self.solution_array = pd.DataFrame(index=range(num_tot_days), columns=range(num_shifts))
 
     def on_solution_callback(self):
         if self._solution_count in self._solutions:
@@ -30,12 +29,11 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
                         if value == 1:
                             is_working = True
                             # print('  Nurse {} works shift {}'.format(n, s))
-                            self.solution_array[d, s] = int(n)
+                            self.solution_array.at[d, s] = int(n)
                     # if not is_working:
                     #     print('  Nurse {} does not work'.format(n))
-            print()
             solution_filename = 'Solution_' + str(self._solution_count) + '.csv'
-            pd.DataFrame(self.solution_array).to_csv(solution_filename)
+            self.solution_array.to_csv(solution_filename)
         self._solution_count += 1
         if self._solution_count >= self._solution_limit:
             print('Stop search after %i solutions' % self._solution_limit)
@@ -205,6 +203,19 @@ def main():
                 model.AddBoolOr(transitions1)
                 model.AddBoolOr(transitions2)
                 model.AddBoolOr(transitions3)
+    # Penalized transitions consecutive saturday
+    dispositions_sat = []
+    for di in itertools.product([2, 3], repeat=2):
+        dispositions_sat.append(di)
+    for n in nurseList:
+        for w in range(1, (num_weeks - 2)):
+            for disp_s in dispositions_sat:
+                transitionsa1 = [shifts[n, ((w+1)*7 - 2), disp_s[0]].Not(), shifts[n, ((w*7) - 2), disp_s[1]].Not()]
+                transitionsa2 = [shifts[n, ((w+2)*7 - 2), disp_s[0]].Not(), shifts[n, ((w*7) - 2), disp_s[1]].Not()]
+                transitionsa3 = [shifts[n, ((w+3)*7 - 2), disp_s[0]].Not(), shifts[n, ((w*7) - 2), disp_s[1]].Not()]
+                model.AddBoolOr(transitionsa1)
+                model.AddBoolOr(transitionsa2)
+                model.AddBoolOr(transitionsa3)
     ################## BALANCE WEEKS ############################################################################
     max_shifts_per_nurse_per_week = (max_shifts_per_nurse // num_weeks) + 1
     for n in nurseList_:
