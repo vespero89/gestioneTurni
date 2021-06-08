@@ -1,12 +1,13 @@
 from ortools.sat.python import cp_model
 import itertools
+from datetime import datetime
 import pandas as pd
 
 
 class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
     """Print intermediate solutions."""
 
-    def __init__(self, shifts, num_nurses, num_tot_days, num_shifts, sols):
+    def __init__(self, shifts, num_nurses, num_tot_days, num_shifts, start_date, shift_name_list, sols):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self._shifts = shifts
         self._num_nurses = num_nurses
@@ -15,7 +16,12 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
         self._solutions = set(sols)
         self._solution_count = 0
         self._solution_limit = 10
-        self.solution_array = pd.DataFrame(index=range(num_tot_days), columns=range(num_shifts))
+        date_time_obj = datetime.strptime(start_date, '%d-%m-%Y')
+        self.date_range = pd.date_range(date_time_obj, periods=num_tot_days)
+        self.shifts_list = shift_name_list
+        columns_name = ['Data']
+        columns_name = columns_name + shift_name_list
+        self.solution_array = pd.DataFrame(index=range(num_tot_days), columns=columns_name)
 
     def on_solution_callback(self):
         if self._solution_count in self._solutions:
@@ -29,10 +35,11 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
                         if value == 1:
                             is_working = True
                             # print('  Nurse {} works shift {}'.format(n, s))
-                            self.solution_array.at[d, s] = int(n)
+                            self.solution_array.at[d, self.shifts_list[s]] = int(n)
                     # if not is_working:
                     #     print('  Nurse {} does not work'.format(n))
             solution_filename = 'Solution_' + str(self._solution_count) + '.csv'
+            self.solution_array['Data'] = self.date_range.strftime('%d/%m/%Y')
             self.solution_array.to_csv(solution_filename)
         self._solution_count += 1
         if self._solution_count >= self._solution_limit:
@@ -58,6 +65,8 @@ def main():
     dayList = range(num_weeks * 7)
     shiftList = range(num_shifts)
     weekList = range(num_weeks)
+    start_date = '07-06-2021'
+    shifts_name = ['Mattina 1', 'Mattina 2', 'Sera 1', 'Sera 2']
 
     tot_shifts_to_assign_per_nurse = shifts_per_week * num_weeks
     min_shifts_per_nurse = tot_shifts_to_assign_per_nurse // num_nurses
@@ -238,7 +247,8 @@ def main():
     solver.parameters.linearization_level = 0
     # Display the first five solutions.
     a_few_solutions = range(5)
-    solution_printer = NursesPartialSolutionPrinter(shifts, num_nurses, len(dayList), num_shifts, a_few_solutions)
+    solution_printer = NursesPartialSolutionPrinter(shifts, num_nurses, len(dayList), num_shifts, start_date,
+                                                    shifts_name, a_few_solutions)
     # status = solver.SearchForAllSolutions(model, solution_printer)
     status = solver.SolveWithSolutionCallback(model, solution_printer)
     # Statistics.
