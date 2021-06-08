@@ -47,7 +47,7 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
 
 def main():
     # Data.
-    num_weeks = 7
+    num_weeks = 8
     week_days = 7
     num_shifts = 4
     sunday_shifts = 4
@@ -160,7 +160,7 @@ def main():
         model.Add(num_shifts_seconda <= num_turni_di_seconda)
     ######MOLINARO###############################################
     weekend_shifts_to_assing_M = 2 * num_weeks
-    min_we_shifts_per_nurse_M = weekend_shifts_to_assing_M // num_nurses
+    min_we_shifts_per_nurse_M = max(2, (weekend_shifts_to_assing_M // num_nurses))
     if weekend_shifts_to_assing_M % num_nurses == 0:
         max_we_shifts_per_nurse_M = min_we_shifts_per_nurse_M
     else:
@@ -180,7 +180,7 @@ def main():
     model.Add(min_we_shifts_per_nurse_M <= num_shifts_domenica_M)
     model.Add(num_shifts_domenica_M <= max_we_shifts_per_nurse_M)
     #############################################################
-    # Penalized transitions
+    # Penalized transitions two consecutive days
     # disposizioni
     dispositions = []
     for di in itertools.product(shiftList, repeat=2):
@@ -194,8 +194,15 @@ def main():
                 model.AddBoolOr(transition1)
                 model.AddBoolOr(transition2)
                 model.AddBoolOr(transition3)
-    # TODO add penalized weekend transitions
-    # TODO add condition for nurseList_:  num_shift_worked_per_shift <= ((max_shifts_per_nurse // num_weeks) + 1)
+    #############################################################################################################
+    # Penalized transitions consecutive sunday
+    for n in nurseList:
+        for w in range(1, (num_weeks - 1)):
+            for disp_s in dispositions:
+                transitions1 = [shifts[n, ((w*7) - 1), disp_s[0]].Not(), shifts[n, ((w+1)*7 - 1), disp_s[1]].Not()]
+                transitions2 = [shifts[n, ((w*7) - 1), disp_s[0]].Not(), shifts[n, ((w+2)*7 - 1), disp_s[1]].Not()]
+                model.AddBoolOr(transitions1)
+                model.AddBoolOr(transitions2)
     ################## BALANCE WEEKS ############################################################################
     max_shifts_per_nurse_per_week = (max_shifts_per_nurse // num_weeks) + 1
     for n in nurseList_:
