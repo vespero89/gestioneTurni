@@ -47,7 +47,7 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
 
 def main():
     # Data.
-    num_weeks = 8
+    num_weeks = 10
     week_days = 7
     num_shifts = 4
     sunday_shifts = 4
@@ -197,12 +197,14 @@ def main():
     #############################################################################################################
     # Penalized transitions consecutive sunday
     for n in nurseList:
-        for w in range(1, (num_weeks - 1)):
+        for w in range(1, (num_weeks - 2)):
             for disp_s in dispositions:
                 transitions1 = [shifts[n, ((w*7) - 1), disp_s[0]].Not(), shifts[n, ((w+1)*7 - 1), disp_s[1]].Not()]
                 transitions2 = [shifts[n, ((w*7) - 1), disp_s[0]].Not(), shifts[n, ((w+2)*7 - 1), disp_s[1]].Not()]
+                transitions3 = [shifts[n, ((w*7) - 1), disp_s[0]].Not(), shifts[n, ((w+3)*7 - 1), disp_s[1]].Not()]
                 model.AddBoolOr(transitions1)
                 model.AddBoolOr(transitions2)
+                model.AddBoolOr(transitions3)
     ################## BALANCE WEEKS ############################################################################
     max_shifts_per_nurse_per_week = (max_shifts_per_nurse // num_weeks) + 1
     for n in nurseList_:
