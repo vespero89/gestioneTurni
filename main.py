@@ -7,7 +7,7 @@ import pandas as pd
 class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
     """Print intermediate solutions."""
 
-    def __init__(self, shifts, num_nurses, num_tot_days, num_shifts, start_date, shift_name_list, sols, span):
+    def __init__(self, shifts, num_nurses, num_tot_days, num_shifts, start_date, shift_name_list, sols, span, name_list):
         cp_model.CpSolverSolutionCallback.__init__(self)
         self._shifts = shifts
         self._num_nurses = num_nurses
@@ -17,13 +17,14 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
         self._solution_count = 0
         self._solution_limit = len(sols)
         self._solutions_span = span
-        date_time_obj = datetime.strptime(start_date, '%d-%m-%Y')
+        date_time_obj = datetime.strptime(start_date, '%d/%m/%Y')
         self.date_range = pd.date_range(date_time_obj, periods=num_tot_days)
         self.shifts_list = shift_name_list
         columns_name = ['Data']
         columns_name = columns_name + shift_name_list
         self.solution_array = pd.DataFrame(index=range(num_tot_days), columns=columns_name)
         self.solution_array['Data'] = self.date_range.strftime('%d/%m/%Y')
+        self.names_list = name_list
 
     def on_solution_callback(self):
         if self._solution_count in self._solutions:
@@ -37,13 +38,13 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
                         if value == 1:
                             is_working = True
                             # print('  Nurse {} works shift {}'.format(n, s))
-                            self.solution_array.at[d, self.shifts_list[s]] = int(n)
+                            self.solution_array.at[d, self.shifts_list[s]] = self.names_list[n]
                     # if not is_working:
                     #     print('  Nurse {} does not work'.format(n))
             if self._solution_count % self._solutions_span == 0:
                 i = self._solution_count // self._solutions_span
                 solution_filename = 'Solution_' + str(i) + '.csv'
-                self.solution_array.to_csv(solution_filename)
+                self.solution_array.to_csv(solution_filename, index=False)
         self._solution_count += 1
         if self._solution_count >= self._solution_limit:
             print('Stop search after %i solutions' % self._solution_limit)
@@ -55,12 +56,43 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
 
 def main():
     # Data.
+    # default parameters
+    num_nurses = 22
+    start_date = '07-06-2021'
     num_weeks = 10
+    operators_name_list = ['MOLINARO', 'SUDATI', 'TRECCOZZI', 'CRESCENZI', 'MANDOLESI', 'PALESTINI E.', 'VALLORANI',
+                           'MARONI',
+                           'BIANCHINI', 'CAGNAZZO', 'NEGREA', 'PALESTINI F.', 'CAMELA', 'FERIOZZI', 'CILENTI',
+                           'MICLAUS',
+                           'CENSORI', 'COSSETI', 'NOVELLI', 'OP1', 'OP2', 'OP3']
+    try:
+        config_file = pd.read_excel('TurniConfig.xlsx')
+        for index, r in config_file.iterrows():
+            if r['PARAMETRO'] == 'DATA INIZIO (GG/MM/AAAA)':
+                start_date = r['VALORE'].strftime('%d/%m/%Y')
+            elif r['PARAMETRO'] == 'NUM SETTIMANE':
+                num_weeks = r['VALORE']
+            elif r['PARAMETRO'] == 'NUM OPERATORI':
+                num_nurses = r['VALORE']
+            elif r['PARAMETRO'] == 'LISTA OPERATORI (lista nomi divisi da virgola)':
+                operators_name_list = r['VALORE']
+                operators_name_list = operators_name_list.split(',')
+    except Exception as e:
+        print(e)
+        print('Using Default parameters')
+        num_nurses = 22
+        start_date = '07-06-2021'
+        num_weeks = 10
+        operators_name_list = ['MOLINARO', 'SUDATI', 'TRECCOZZI', 'CRESCENZI', 'MANDOLESI', 'PALESTINI E.', 'VALLORANI',
+                               'MARONI',
+                               'BIANCHINI', 'CAGNAZZO', 'NEGREA', 'PALESTINI F.', 'CAMELA', 'FERIOZZI', 'CILENTI',
+                               'MICLAUS',
+                               'CENSORI', 'COSSETI', 'NOVELLI', 'OP1', 'OP2', 'OP3']
+    # fixed parameters
     week_days = 7
     num_shifts = 4
     sunday_shifts = 4
     shifts_per_week = 16
-    num_nurses = 22
     nurseList = list(range(num_nurses))
     nurseList_ = range(1, num_nurses)
     weekdaysList = range(week_days)
@@ -68,7 +100,6 @@ def main():
     dayList = range(num_weeks * 7)
     shiftList = range(num_shifts)
     weekList = range(num_weeks)
-    start_date = '07-06-2021'
     shifts_name = ['Mattina 1', 'Mattina 2', 'Sera 1', 'Sera 2']
     num_solutions = 10
     single_solution = True
@@ -256,7 +287,7 @@ def main():
     solver.parameters.linearization_level = 0
     # Display the first five solutions.
     solution_printer = NursesPartialSolutionPrinter(shifts, num_nurses, len(dayList), num_shifts, start_date,
-                                                    shifts_name, a_few_solutions, solutions_span)
+                                                    shifts_name, a_few_solutions, solutions_span, operators_name_list)
     if single_solution:
         status = solver.SolveWithSolutionCallback(model, solution_printer)
     else:
