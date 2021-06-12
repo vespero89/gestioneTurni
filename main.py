@@ -101,7 +101,7 @@ def main():
     shiftList = range(num_shifts)
     weekList = range(num_weeks)
     shifts_name = ['Mattina 1', 'Mattina 2', 'Sera 1', 'Sera 2']
-    num_solutions = 10
+    num_solutions = 1
     single_solution = True
     if num_solutions > 1:
         single_solution = False
