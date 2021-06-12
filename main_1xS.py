@@ -115,9 +115,6 @@ def main():
     else:
         max_shifts_per_nurse = min_shifts_per_nurse + 1
 
-    num_turni_di_prima = (max_shifts_per_nurse // 2)
-    num_turni_di_seconda = max_shifts_per_nurse - num_turni_di_prima
-
     weekend_shifts_to_assing = sunday_shifts * num_weeks
     min_we_shifts_per_nurse = weekend_shifts_to_assing // num_nurses
     if weekend_shifts_to_assing % num_nurses == 0:
@@ -125,14 +122,9 @@ def main():
     else:
         max_we_shifts_per_nurse = min_we_shifts_per_nurse + 1
 
-    # num_weeks = input("Inserire numero di settimane da generare: ")
-    # num_weeks = int(num_weeks)
-
     print("Generated weeks {}".format(num_weeks))
     print("Min shifts per nurse {}".format(min_shifts_per_nurse))
     print("Max shifts per nurse {}".format(max_shifts_per_nurse))
-    print("Max shifts per nurse di Prima {}".format(num_turni_di_prima))
-    print("Max shifts per nurse di Seconda {}".format(num_turni_di_seconda))
 
     print("Min WE shifts per nurse {}".format(min_we_shifts_per_nurse))
     print("Max WE shifts per nurse {}".format(max_we_shifts_per_nurse))
