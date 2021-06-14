@@ -44,7 +44,7 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
                     #     print('  Nurse {} does not work'.format(n))
             if self._solution_count % self._solutions_span == 0:
                 i = self._solution_count // self._solutions_span
-                solution_filename = 'Solution_' + str(i) + '.csv'
+                solution_filename = 'Solution_1xS_' + str(i) + '.csv'
                 self.solution_array.to_csv(solution_filename, index=False)
         self._solution_count += 1
         if self._solution_count >= self._solution_limit:
@@ -56,9 +56,9 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
 
 
 def main():
-    print('Code version: ' + code_version)
     # Data.
     # default parameters
+    print('Code version: ' + code_version)
     num_nurses = 22
     start_date = '07-06-2021'
     num_weeks = 10
@@ -68,7 +68,7 @@ def main():
                            'MICLAUS',
                            'CENSORI', 'COSSETI', 'NOVELLI', 'OP1', 'OP2', 'OP3']
     try:
-        config_file = pd.read_excel('TurniConfig.xlsx', sheet_name='Parametri')
+        config_file = pd.read_excel('TurniConfig.xlsx')
         for index, r in config_file.iterrows():
             if r['PARAMETRO'] == 'DATA INIZIO (GG/MM/AAAA)':
                 start_date = r['VALORE'].strftime('%d/%m/%Y')
@@ -92,9 +92,9 @@ def main():
                                'CENSORI', 'COSSETI', 'NOVELLI', 'OP1', 'OP2', 'OP3']
     # fixed parameters
     week_days = 7
-    num_shifts = 4
-    sunday_shifts = 4
-    shifts_per_week = 16
+    num_shifts = 2
+    sunday_shifts = 2
+    shifts_per_week = 8
     nurseList = list(range(num_nurses))
     nurseList_ = range(1, num_nurses)
     weekdaysList = range(week_days)
@@ -102,7 +102,7 @@ def main():
     dayList = range(num_weeks * 7)
     shiftList = range(num_shifts)
     weekList = range(num_weeks)
-    shifts_name = ['Mattina 1', 'Mattina 2', 'Sera 1', 'Sera 2']
+    shifts_name = ['Mattina 1', 'Sera 1']
     num_solutions = 1
     single_solution = True
     if num_solutions > 1:
@@ -117,9 +117,6 @@ def main():
     else:
         max_shifts_per_nurse = min_shifts_per_nurse + 1
 
-    num_turni_di_prima = (max_shifts_per_nurse // 2)
-    num_turni_di_seconda = max_shifts_per_nurse - num_turni_di_prima
-
     weekend_shifts_to_assing = sunday_shifts * num_weeks
     min_we_shifts_per_nurse = weekend_shifts_to_assing // num_nurses
     if weekend_shifts_to_assing % num_nurses == 0:
@@ -127,14 +124,9 @@ def main():
     else:
         max_we_shifts_per_nurse = min_we_shifts_per_nurse + 1
 
-    # num_weeks = input("Inserire numero di settimane da generare: ")
-    # num_weeks = int(num_weeks)
-
     print("Generated weeks {}".format(num_weeks))
     print("Min shifts per nurse {}".format(min_shifts_per_nurse))
     print("Max shifts per nurse {}".format(max_shifts_per_nurse))
-    print("Max shifts per nurse di Prima {}".format(num_turni_di_prima))
-    print("Max shifts per nurse di Seconda {}".format(num_turni_di_seconda))
 
     print("Min WE shifts per nurse {}".format(min_we_shifts_per_nurse))
     print("Max WE shifts per nurse {}".format(max_we_shifts_per_nurse))
@@ -155,13 +147,11 @@ def main():
         for d in infrasettimanali:
             day = w*7 + d
             model.Add(sum(shifts[(n, day, 0)] for n in nurseList) == 0)
-            model.Add(sum(shifts[(n, day, 1)] for n in nurseList) == 0)
     # MOLINARO
     for w in weekList:
         for d in weekdaysList:
             day = int(w * 7 + d)
-            model.Add(shifts[(0, day, 2)] == 0)
-            model.Add(shifts[(0, day, 3)] == 0)
+            model.Add(shifts[(0, day, 1)] == 0)
 
     # Each shift is assigned to exactly one nurse in the schedule period.
     i = 0
@@ -175,8 +165,7 @@ def main():
     for w in weekList:
         for d in infrasettimanali:
             day = w * 7 + d
-            for s in [2, 3]:
-                model.Add(sum(shifts[(n, day, s)] for n in nurseList) == 1)
+            model.Add(sum(shifts[(n, day, 1)] for n in nurseList) == 1)
 
     # Each nurse works at most one shift per day.
     for n in nurseList:
@@ -185,18 +174,12 @@ def main():
 
     for n in nurseList_:
         num_shifts_worked = 0
-        num_shifts_prima = 0
-        num_shifts_seconda = 0
         num_shifts_domenica = 0
         j = 0
         for d in dayList:
             j += 1
             for s in shiftList:
                 num_shifts_worked += shifts[(n, d, s)]
-            for s1 in [0, 2]:
-                num_shifts_prima += shifts[(n, d, s1)]
-            for s2 in [1, 3]:
-                num_shifts_seconda += shifts[(n, d, s2)]
             if j == 7:
                 for sd in shiftList:
                     num_shifts_domenica += shifts[(n, d, sd)]
@@ -205,8 +188,6 @@ def main():
         model.Add(num_shifts_worked <= max_shifts_per_nurse)
         model.Add(min_we_shifts_per_nurse <= num_shifts_domenica)
         model.Add(num_shifts_domenica <= max_we_shifts_per_nurse)
-        model.Add(num_shifts_prima <= num_turni_di_prima)
-        model.Add(num_shifts_seconda <= num_turni_di_seconda)
     ######MOLINARO###############################################
     weekend_shifts_to_assing_M = 2 * num_weeks
     min_we_shifts_per_nurse_M = max(2, (weekend_shifts_to_assing_M // num_nurses))
@@ -214,8 +195,6 @@ def main():
         max_we_shifts_per_nurse_M = min_we_shifts_per_nurse_M
     else:
         max_we_shifts_per_nurse_M = min_we_shifts_per_nurse_M + 1
-    num_shifts_prima_M = 0
-    num_shifts_seconda_M = 0
     num_shifts_domenica_M = 0
     j = 0
     for d in dayList:
@@ -223,16 +202,14 @@ def main():
         if j == 7:
             for sd in shiftList:
                 num_shifts_domenica_M += shifts[(0, d, sd)]
-            num_shifts_prima_M += shifts[(0, d, 0)]
-            num_shifts_seconda_M += shifts[(0, d, 1)]
             j = 0
     model.Add(min_we_shifts_per_nurse_M <= num_shifts_domenica_M)
     model.Add(num_shifts_domenica_M <= max_we_shifts_per_nurse_M)
     #############################################################
-    # Penalized transitions two consecutive days
+    # Penalized transitions two consecutive days # TODO FROM HERE
     # disposizioni
     dispositions = []
-    for di in itertools.product(shiftList, repeat=2):
+    for di in itertools.product([0, 1], repeat=2):
         dispositions.append(di)
     for n in nurseList_:
         for d in range((num_weeks * 7) - 3):
@@ -256,7 +233,7 @@ def main():
                 model.AddBoolOr(transitions3)
     # Penalized transitions consecutive saturday
     dispositions_sat = []
-    for di in itertools.product([2, 3], repeat=2):
+    for di in itertools.product([0, 1], repeat=2):
         dispositions_sat.append(di)
     for n in nurseList:
         for w in range(1, (num_weeks - 2)):
