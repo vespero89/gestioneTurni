@@ -2,6 +2,7 @@ from ortools.sat.python import cp_model
 import itertools
 from datetime import datetime
 import pandas as pd
+code_version = '1.0.0'
 
 
 class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
@@ -55,6 +56,7 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
 
 
 def main():
+    print('Code version: ' + code_version)
     # Data.
     # default parameters
     num_nurses = 22
@@ -66,7 +68,7 @@ def main():
                            'MICLAUS',
                            'CENSORI', 'COSSETI', 'NOVELLI', 'OP1', 'OP2', 'OP3']
     try:
-        config_file = pd.read_excel('TurniConfig.xlsx')
+        config_file = pd.read_excel('TurniConfig.xlsx', sheet_name='Parametri')
         for index, r in config_file.iterrows():
             if r['PARAMETRO'] == 'DATA INIZIO (GG/MM/AAAA)':
                 start_date = r['VALORE'].strftime('%d/%m/%Y')

@@ -2,6 +2,7 @@ from ortools.sat.python import cp_model
 import itertools
 from datetime import datetime
 import pandas as pd
+code_version = '1.0.0'
 
 
 class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
@@ -57,6 +58,7 @@ class NursesPartialSolutionPrinter(cp_model.CpSolverSolutionCallback):
 def main():
     # Data.
     # default parameters
+    print('Code version: ' + code_version)
     num_nurses = 22
     start_date = '07-06-2021'
     num_weeks = 10
